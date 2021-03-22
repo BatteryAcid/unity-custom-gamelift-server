@@ -1,5 +1,3 @@
-using System.Collections;
-using System.Collections.Generic;
 using UnityEngine;
 
 public class Startup : MonoBehaviour
@@ -11,7 +9,6 @@ public class Startup : MonoBehaviour
       var args = System.Environment.GetCommandLineArgs();
       for (int i = 0; i < args.Length; i++)
       {
-         // Debug.Log("Arg: " + args[i]);
          if (args[i] == name)
          {
             return true;

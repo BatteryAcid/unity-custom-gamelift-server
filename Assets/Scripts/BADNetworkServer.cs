@@ -1,7 +1,6 @@
 using System;
 using System.Collections.Generic;
 using UnityEngine;
-using Aws.GameLift.Server;
 using Newtonsoft.Json;
 using System.Text;
 
@@ -19,8 +18,8 @@ public class BADNetworkServer : MonoBehaviour
    {
       Debug.Log("Data received from connectionId: " + connectionId);
 
-      byte[] messageBytes = message.Array;
-      string convertedMessage = Encoding.UTF8.GetString(messageBytes, 0, messageBytes.Length);
+      string convertedMessage = Encoding.UTF8.GetString(message.Array, 0, message.Count);
+      Debug.Log("Converted message: " + convertedMessage);
       BADNetworkMessage networkMessage = JsonConvert.DeserializeObject<BADNetworkMessage>(convertedMessage);
 
       ProcessMessage(connectionId, networkMessage);
@@ -44,8 +43,23 @@ public class BADNetworkServer : MonoBehaviour
             SendMessage(connectionId, responseMessage);
 
             CheckAndSendGameReadyToStartMsg(connectionId);
+
          }
-         // TODO: handle more opCodes here for game play stuff
+         else if (networkMessage._opCode == "W")
+         {
+            Debug.Log("W OP CODE HIT");
+            if (GameSessionState == "STARTED")
+            {
+               CheckForGameOver(connectionId);
+            }
+            else
+            {
+               Debug.LogWarning("Received W opCode before game started.");
+            }
+         }
+
+         // can handle additional opCods here
+
       }
       else
       {
@@ -72,6 +86,7 @@ public class BADNetworkServer : MonoBehaviour
          // tell all players the game is ready to start
          foreach (KeyValuePair<int, string> playerSession in _playerSessions)
          {
+            GameSessionState = "STARTED";
             BADNetworkMessage responseMessage = new BADNetworkMessage("START", playerSession.Value);
             SendMessage(playerSession.Key, responseMessage);
          }
@@ -82,7 +97,7 @@ public class BADNetworkServer : MonoBehaviour
    {
       Debug.Log("HandleConnect");
 
-      var outcome = GameLiftServerAPI.AcceptPlayerSession(playerSessionId);
+      var outcome = _gameLiftServer.AcceptPlayerSession(playerSessionId);
       if (outcome.Success)
       {
          Debug.Log("PLAYER SESSION VALIDATED");
@@ -98,10 +113,45 @@ public class BADNetworkServer : MonoBehaviour
       return outcome.Success;
    }
 
+   private void CheckForGameOver(int fromConnectionId)
+   {
+      if (GameSessionState != GameOverState)
+      {
+         GameSessionState = GameOverState;
+         foreach (KeyValuePair<int, string> playerSession in _playerSessions)
+         {
+            // send out the win/lose status to all players
+            BADNetworkMessage responseMessage;
+            if (playerSession.Key == fromConnectionId)
+            {
+               responseMessage = new BADNetworkMessage("WIN", playerSession.Value);
+            }
+            else
+            {
+               responseMessage = new BADNetworkMessage("LOSE", playerSession.Value);
+            }
+
+            SendMessage(playerSession.Key, responseMessage);
+
+            _gameLiftServer.RemovePlayerSession(playerSession.Value); // player session id
+
+            _server.Disconnect(playerSession.Key);
+         }
+
+         Debug.Log($"Ending game, player with connection Id {fromConnectionId} hit W first.");
+
+         _gameLiftServer.HandleGameEnd();
+      }
+      else
+      {
+         Debug.Log("CheckForGameOver: Game over already being processed.");
+      }
+   }
+
    // For the sake of simplicity for this demo, if any player disconnects, just end the game. 
    // That means if only one player joins, then disconnects, the game session ends.
    // Your game may remain open to receiving new players, without ending the game session, up to you.
-   private void CheckForGameEnd(int disconnectingId)
+   private void EndGameAfterDisconnect(int disconnectingId)
    {
       Debug.Log("CheckForGameEnd");
 
@@ -122,7 +172,7 @@ public class BADNetworkServer : MonoBehaviour
                _server.Disconnect(playerSession.Key);
             }
 
-            _gameLiftServer.HandleDisconnect(playerSession.Value); // player session id
+            _gameLiftServer.RemovePlayerSession(playerSession.Value); // player session id
          }
 
          Debug.Log("Ending game, player disconnected.");
@@ -130,7 +180,7 @@ public class BADNetworkServer : MonoBehaviour
       }
       else
       {
-         Debug.Log("Game session is already being shut down.");
+         Debug.Log("EndGameAfterDisconnect: Disconnecting game over is already being processed.");
       }
    }
 
@@ -138,7 +188,7 @@ public class BADNetworkServer : MonoBehaviour
    {
       Debug.Log("Connection ID: " + connectionId + " Disconnected.");
 
-      CheckForGameEnd(connectionId);
+      EndGameAfterDisconnect(connectionId);
    }
 
    private void OnConnected(int connectionId)
@@ -146,13 +196,13 @@ public class BADNetworkServer : MonoBehaviour
       Debug.Log("Connection ID: " + connectionId + " Connected");
    }
 
-   public void StartTCPServer()
+   public void StartTCPServer(int port)
    {
       // had to set these to 0 or else the TCP connection would timeout after the default 5 seconds.  Investivate further.
       _server.SendTimeout = 0;
       _server.ReceiveTimeout = 0;
 
-      _server.Start(GameLiftServer.TcpServerPort);
+      _server.Start(port);
    }
 
    void Awake()

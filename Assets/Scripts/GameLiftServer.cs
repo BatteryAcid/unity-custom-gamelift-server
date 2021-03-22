@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using UnityEngine;
 using Aws.GameLift.Server;
 using Aws.GameLift.Server.Model;
+using Aws.GameLift;
 
 // Based on https://docs.aws.amazon.com/gamelift/latest/developerguide/integration-engines-unity-using.html
 public class GameLiftServer : MonoBehaviour
@@ -10,14 +11,17 @@ public class GameLiftServer : MonoBehaviour
    // server used to communicate with client
    private BADNetworkServer _server;
 
-   // Identify port number (hard coded here for simplicity) the game server is listening on for player connections
-   public static int TcpServerPort = 7777;
+   // Identify port number the game server is listening on for player connections
+   private static int _tcpServerPort = 7777;
 
    // This is an example of a simple integration with GameLift server SDK that will make game server processes go active on GameLift!
    public void Start()
    {
       //InitSDK will establish a local connection with GameLift's agent to enable further communication.
       var initSDKOutcome = GameLiftServerAPI.InitSDK();
+
+      _tcpServerPort = UnityEngine.Random.Range(7000, 8000);
+      Debug.Log("TCP Port: " + _tcpServerPort);
 
       if (initSDKOutcome.Success)
       {
@@ -26,7 +30,7 @@ public class GameLiftServer : MonoBehaviour
             this.OnGameSessionUpdate,
             this.OnProcessTerminate,
             this.OnHealthCheck,
-            TcpServerPort, // This game server tells GameLift the port it will listen on for incoming player connections.
+            _tcpServerPort, // This game server tells GameLift the port it will listen on for incoming player connections.
             new LogParameters(new List<string>()
             {
                // Here, the game server tells GameLift what set of files to upload when the game session ends.
@@ -48,7 +52,7 @@ public class GameLiftServer : MonoBehaviour
             if (_server != null)
             {
                Debug.Log("BADNetworkServer is good.");
-               _server.StartTCPServer();
+               _server.StartTCPServer(_tcpServerPort);
             }
             else
             {
@@ -108,9 +112,13 @@ public class GameLiftServer : MonoBehaviour
       return true;
    }
 
-   public void HandleDisconnect(string playerSessionId)
+   public GenericOutcome AcceptPlayerSession(string playerSessionId) {
+      return GameLiftServerAPI.AcceptPlayerSession(playerSessionId);
+   }
+
+   public void RemovePlayerSession(string playerSessionId)
    {
-      Debug.Log("HandleDisconnect for player session id: " + playerSessionId);
+      Debug.Log("RemovePlayerSession for player session id: " + playerSessionId);
 
       try
       {
