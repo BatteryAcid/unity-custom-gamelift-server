@@ -11,6 +11,10 @@ This Unity project is an example Unity Custom GameLift server enabled to communi
 * Part 3: https://youtu.be/cOS4Ax85elQ
     * client: https://github.com/BatteryAcid/unity-custom-gamelift-client/tree/connect-custom-gamelift  
     * server: https://github.com/BatteryAcid/unity-custom-gamelift-server/tree/custom-gamelift-server
+    
+## 👋 Let's talk shop 👇  
+[Discord] https://discord.gg/psjbBDvNBK  
+[Twitter] https://twitter.com/BatteryAcidDev
 
 ## References  
 
